@@ -1,5 +1,17 @@
 #include <cstdio>
+#include <cassert>
 #include <cstring>
+
+#ifdef DEBUG
+#define debug(fmt, args...) fprintf(stderr, "[%s:%d:%s()]: " fmt "\n", \
+__FILE__, __LINE__, __func__, ##args)
+#else
+#define debug(fmt, args...)
+#endif
+
+char x[100010];
+int n;
+int q;
 
 struct Node {
     Node *p;
@@ -16,6 +28,46 @@ struct Node {
         if (!p) return false;
         return p->r == this;
     }
+    void rebuildCount() {
+        int newCount = 1;
+        if (this->l) {
+            newCount += this->l->cnt;
+        }
+        if (this->r) {
+            newCount += this->r->cnt;
+        }
+        this->cnt = newCount;
+    }
+    Node* discardLeftChild() {
+        if (!this->l) return this->l;
+        Node *leftChild = this->l;
+        this->l = nullptr;
+        leftChild->p = nullptr;
+        rebuildCount();
+        return leftChild;
+    }
+    void ownLeftChild(Node *child) {
+        assert(!this->l);
+        if (!child) return;
+        child->p = this;
+        this->l = child;
+        rebuildCount();
+    }
+    Node* discardRightChild() {
+        if (!this->r) return this->r;
+        Node *rightChild = this->r;
+        this->r = nullptr;
+        rightChild->p = nullptr;
+        rebuildCount();
+        return rightChild;
+    }
+    void ownRightChild(Node *child) {
+        assert(!this->r);
+        if (!child) return;
+        child->p = this;
+        this->r = child;
+        rebuildCount();
+    }
 };
 
 struct SplayTree {
@@ -24,13 +76,14 @@ struct SplayTree {
     void insert(char key) {
         //is mock.
         if (!root) {
+            debug("No root detected. %c is the initial key.", key);
             root = new Node(key);
             root->cnt = 1;
         } else {
-            root->r = new Node(key);
-            root->r->p = root;
-            root->r->cnt = 1;
-            splay(root->r);
+            debug("%c is joining as a right child of the root node.", key);
+            Node *x = new Node(key);
+            root->ownRightChild(x);
+            splay(x);
         }
     }
 
@@ -44,51 +97,83 @@ struct SplayTree {
         return p->key;
     }
 
-    void rotate(Node *x) {
-        if (!x->p) return;
-        Node *p = x->p;
-        Node *g = p->p;
-        Node *c = nullptr;
-        if (x->isLeftChild()) {
-            if (g) {
-                if (p->isLeftChild()) {
-                    g->l = x;
-                } else {
-                    g->r = x;
-                }
-            }
-            c = x->r;
-            x->p = g;
-            x->r = p;
-            p->p = x;
-            p->l = c;
-            if (c) c->p = p;
-            p->cnt = safeCount(p->l) + safeCount(p->r) + 1;
-            x->cnt = safeCount(x->l) + safeCount(x->r) + 1;
-        } else {
-            if (g) {
-                if (p->isLeftChild()) {
-                    g->l = x;
-                } else {
-                    g->r = x;
-                }
-            }
-            c = x->l;
-            x->p = g;
-            x->l = p;
-            p->p = x;
-            p->r = c;
-            if (c) c->p = p;
-            p->cnt = safeCount(p->l) + safeCount(p->r) + 1;
-            x->cnt = safeCount(x->l) + safeCount(x->r) + 1;
+    void preorder(Node *x) {
+        if (x->l) {
+            preorder(x->l);
+        }
+        fprintf(stderr, "%c",x->key);
+        if (x->r) {
+            preorder(x->r);
         }
     }
+
+    void rotateSubtree(Node *p, Node *x) {
+        // assertion: say no if p is not x's parent.
+        assert(x->p == p);
+
+        bool lefty = x->isLeftChild();
+        // step 2. parent discards x
+        if (lefty) {
+            p->discardLeftChild();
+        } else {
+            p->discardRightChild();
+        }
+
+        // step 3. x discards proper child
+        Node *xChild = nullptr;
+        if (lefty) {
+            xChild = x->discardRightChild();
+        } else {
+            xChild = x->discardLeftChild();
+        }
+        // step 4. parent owns xChild as left child
+        if (lefty) {
+            p->ownLeftChild(xChild);
+        } else {
+            p->ownRightChild(xChild);
+        }
+        // step 5. x owns p as right child
+        if (lefty) {
+            x->ownRightChild(p);
+        } else {
+            x->ownLeftChild(p);
+        }
+    }
+
+    void rotate(Node *x) {
+        if (!x->p) {
+            debug("x[key: %c] is a root node.", x->key);
+            return;
+        }
+        Node *p = x->p;
+        Node *gp = p->p;
+        if (gp) {
+            bool lefty = p->isLeftChild();
+            // step 1. grandparent discards parent
+            if (lefty) {
+                p = gp->discardLeftChild();
+            } else {
+                p = gp->discardRightChild();
+            }
+            rotateSubtree(p, x);
+            // step 6. gp owns x as proper child
+            if (lefty) {
+                gp->ownLeftChild(x);
+            } else {
+                gp->ownRightChild(x);
+            }
+        } else {
+            rotateSubtree(p, x);
+            root = x;
+        }
+    }
+
     void splay(Node *x) {
         while(x->p) {
             Node *p = x->p;
-            Node *g = p->p;
-            if (g) {
-                if ((p->isLeftChild() && x->isLeftChild()) || (p->isRightChild() && x->isRightChild())) {
+            Node *gp = p->p;
+            if (gp) {
+                if (p->isLeftChild() == x->isLeftChild()) {
                     rotate(p);
                 } else {
                     rotate(x);
@@ -96,82 +181,91 @@ struct SplayTree {
             }
             rotate(x);
         }
-        root = x;
     }
-    Node* findKthElement(int k){
-        Node *x = root;
-        int originalK = k;
-        while (true) {
-            if (safeCount(x->l) <= k) {
-                k -= safeCount(x->l);
-                if (k == 0) {
-                    break;
-                } else {
+
+    Node* findKthElement(int k) {
+        k++;
+        Node *curr = this->root;
+        while (k > 0) {
+            if (curr->l) {
+                if (curr->l->cnt < k) {
+                    k -= curr->l->cnt;
+                    if (k == 1) {
+                        break;
+                    }
                     k--;
-                    x = x->r;
+                    assert(curr->r);
+                    curr = curr->r;
+                } else {
+                    curr = curr->l;
                 }
             } else {
-                x = x->l;
+                if (k == 1) {
+                    break;
+                }
+                k--;
+                assert(curr->r);
+                curr = curr->r;
             }
         }
-        splay(x);
-        return x;
+        splay(curr);
+        return curr;
     }
-    void preorder(Node *x) {
-        if (x->l) {
-            preorder(x->l);
-        }
-        printf("%c",x->key);
-        if (x->r) {
-            preorder(x->r);
+
+    void moveToLeftmost(int a, int b) {
+        if (b == n-1) {
+            Node *p = findKthElement(a-1);
+            Node *r = root->discardRightChild();
+            findKthElement(0);
+            root->ownLeftChild(r);
+        } else {
+            Node *p = findKthElement(a-1);
+            Node *q = findKthElement(b+1);
+            while(p->p != root) {
+                rotate(p);
+            }
+            Node *r = p->discardRightChild();
+            findKthElement(0);
+            root->ownLeftChild(r);
         }
     }
-    void swapThroughLeft(Node *p1, Node *p2) {
-        while(p2->p != p1 && p2 != p1) {
-            rotate(p2);
+
+    void moveToRightmost(int a, int b) {
+        if (a == 0) {
+            Node *p = findKthElement(b+1);
+            Node *l = root->discardLeftChild();
+            int maxNode = n - l->cnt - 1;
+            findKthElement(maxNode);
+            root->ownRightChild(l);
+        } else {
+            Node *p = findKthElement(b+1);
+            Node *q = findKthElement(a-1);
+            while(p->p != root) {
+                rotate(p);
+            }
+            Node *l = p->discardLeftChild();
+            int maxNode = n - l->cnt - 1;
+            findKthElement(maxNode);
+            root->ownRightChild(l);
         }
-        Node *target = p2->r;
-        Node *minp = p2;
-        while(minp->l) minp = minp->l;
-        while(minp->p != p1) {
-            rotate(minp);
-        }
-        minp->l = target;
-        target->p = minp;
-        p2->r = nullptr;
-        minp->cnt = safeCount(minp->l) + safeCount(minp->r) + 1;
-        p2->cnt = safeCount(p2->l) + safeCount(p2->r) + 1;
-    }
-    void swapThroughRight(Node *p1, Node *p2) {
-        while(p2->p != p1 && p2 != p1) {
-            rotate(p2);
-        }
-        Node *target = p2->l;
-        Node *minp = p2;
-        while(minp->r) minp = minp->r;
-        while(minp->p != p1) {
-            rotate(minp);
-        }
-        minp->r = target;
-        target->p = minp;
-        p2->l = nullptr;
-        minp->cnt = safeCount(minp->l) + safeCount(minp->r) + 1;
-        p2->cnt = safeCount(p2->l) + safeCount(p2->r) + 1;
     }
 };
 
 SplayTree *tree;
-char x[100010];
-int n;
-int q;
 
 int main() {
     tree = new SplayTree();
     scanf("%s",x);
     n = strlen(x);
+    debug("insertion");
     for(int i = 0; i < n; i++) {
         tree->insert(x[i]);
     }
+    debug("success");
+#ifdef DEBUG
+    tree->preorder(tree->root);
+#endif
+    debug("");
     scanf("%d",&q);
     while(q--){
         int a,b,c;
@@ -180,41 +274,30 @@ int main() {
         switch(c) {
         case 1:
             scanf("%d%d",&a,&b);
+            debug("%d %d %d", c, a, b);
             if (a != 0) {
-                p = tree->findKthElement(a-1);
-                if (b == n-1) {
-                    p2 = p;
-                } else {
-                    p2 = tree->findKthElement(b+1);
-                }
-            } else {
-                continue;
+                tree->moveToLeftmost(a, b);
             }
-            tree->swapThroughLeft(p2, p);
             break;
         case 2:
             scanf("%d%d",&a,&b);
-            if (a != 0) {
-                if (b == n-1) {
-                    continue;
-                }
-                p2 = tree->findKthElement(b+1);
-                p = tree->findKthElement(a-1);
-            } else {
-                if (b == n-1) {
-                    continue;
-                }
-                p = tree->findKthElement(b+1);
-                p2 = p;
+            debug("%d %d %d", c, a, b);
+            if (b != n-1) {
+                tree->moveToRightmost(a, b);
             }
-            tree->swapThroughRight(p, p2);
             break;
         case 3:
             scanf("%d",&a);
-            p = tree->findKthElement(a);
-            printf("%c\n", p->key);
+            debug("%d %d", c, a);
+            Node *p = tree->findKthElement(a);
+            printf("%c\n",p->key);
             break;
         }
+        debug("preordering");
+#ifdef DEBUG
+        tree->preorder(tree->root);
+#endif
+        debug("");
     }
     return 0;
 }

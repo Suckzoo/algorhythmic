@@ -31,5 +31,7 @@
 *.out
 *.app
 
-# Inputs
+# Inputs, outputs and logs
 *.in
+*.out
+*.log
