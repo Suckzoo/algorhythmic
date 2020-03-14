@@ -1,5 +1,11 @@
 #include <cstdio>
 #include <cmath>
+#ifdef DEBUG
+#define debug(fmt, args...) fprintf(stderr, "[%s:%d:%s()]: " fmt "\n", \
+__FILE__, __LINE__, __func__, ##args)
+#else
+#define debug(fmt, args...)
+#endif
 
 double a,b,c;
 double cand[500020];
@@ -40,8 +46,10 @@ int main() {
         }
     }
     double x;
-    while(e - s > 1e-11) {
+    while(e - s > 1e-10) {
         x = (s + e) / 2;
+        debug("s: %.20lf, e: %.20lf", s, e);
+        debug("x: %.20lf, f(x): %.20lf", x, f(x));
         if (f(x) > 0) {
             s = x;
         } else {
