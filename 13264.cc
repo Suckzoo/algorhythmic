@@ -29,6 +29,8 @@ private:
     int depth;
     vector<int> sa[20];
     vector<int> ranksa[20];
+    vector<vector<Suffix>> a;
+    vector<vector<Suffix>> b;
 
     void radixbuildLevelZero(vector<int> &targetArray) {
         vector<int> radixBucket[128];
@@ -49,8 +51,6 @@ private:
 
     void radixbuild(int level, vector<int> &targetArray) {
         int n = this->s.size();
-        vector<vector<Suffix>> a(2*n);
-        vector<vector<Suffix>> b(2*n);
         debug("Pre AB Sorted");
         for(auto target: targetArray) {
             int half = 1 << (level-1);
@@ -66,6 +66,7 @@ private:
             for(auto x: bin) {
                 a[x.f].push_back(x);
             }
+            bin.clear();
         }
         debug("A Sorted");
         int rank = 0;
@@ -79,6 +80,7 @@ private:
                 ranksa[level][x.i] = rank;
                 sa[level].push_back(x.i);
             }
+            bin.clear();
         }
     }
 
@@ -98,7 +100,8 @@ public:
         }
         debug("heyhey");
         radixbuildLevelZero(sa[0]);
-        debugSuffixArray(0);
+        a.resize(2*n);
+        b.resize(2*n);
         for(int i=1;i<=depth;i++) {
             debug("heyhey");
             radixbuild(i, sa[i-1]);
