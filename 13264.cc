@@ -15,9 +15,14 @@ using namespace std;
 typedef pair<int, int> pii;
 typedef long long llint;
 
-char s[100010];
+char s[400010];
 int n;
 
+struct Suffix{
+    int i;
+    int f;
+    int s;
+};
 class SuffixArray {
 private:
     string s;
@@ -25,21 +30,56 @@ private:
     vector<int> sa[20];
     vector<int> ranksa[20];
 
-    void buildForZeroLevel() {
-        sort(sa[0].begin(), sa[0].end(), [this](int x, int y) {
-            return this->charAt(x) < this->charAt(y);
-        });
+    void radixbuildLevelZero(vector<int> &targetArray) {
+        vector<int> radixBucket[128];
+        for(auto target: targetArray) {
+            radixBucket[(int)charAt(target)].push_back(target);
+        }
+        int k = 0;
+        int rank = 0;
+        for(int i=0;i<128;i++) {
+            for(auto t: radixBucket[i]) {
+                sa[0][k++] = t;
+                ranksa[0][t] = rank;
+            }
+            if (radixBucket[i].size()) rank++;
+            radixBucket[i].clear();
+        }
     }
 
-    void build(int k) {
-        sort(sa[k].begin(), sa[k].end(), [this, ranksa = this->ranksa, k, n = this->s.size()](int x, int y) {
-            int half = 1 << (k-1);
-            debug("Challenge at level %d!!!\n\nchallengers are %d and %d", k, x, y);
-            debug("Half is %d", half);
-            debug("prevsa[x]: %d, prevsa[y]: %d", ranksa[k-1][x], ranksa[k-1][y]);
-            debug("prevsa[x+half]: %d, prevsa[y+half]: %d\n\n\n\n", ranksa[k-1][(x+half)%n], ranksa[k-1][(y+half)%n]);
-            return ranksa[k-1][x] < ranksa[k-1][y] || (ranksa[k-1][x] == ranksa[k-1][y] && ranksa[k-1][(x + half) % n] < ranksa[k-1][(y + half) % n]);
-        });
+    void radixbuild(int level, vector<int> &targetArray) {
+        int n = this->s.size();
+        vector<vector<Suffix>> a(2*n);
+        vector<vector<Suffix>> b(2*n);
+        debug("Pre AB Sorted");
+        for(auto target: targetArray) {
+            int half = 1 << (level-1);
+            Suffix x;
+            x.i = target;
+            x.f = ranksa[level-1][target];
+            x.s = ranksa[level-1][(target + half) % n];
+            debug("%d %d %d", x.i, x.f, x.s);
+            b[x.s].push_back(x);
+        }
+        debug("B Sorted");
+        for(auto &bin: b) {
+            for(auto x: bin) {
+                a[x.f].push_back(x);
+            }
+        }
+        debug("A Sorted");
+        int rank = 0;
+        Suffix prevx;
+        for(auto &bin: a) {
+            for(auto x: bin) {
+                if (prevx.f != x.f || prevx.s != x.s) {
+                    rank++;
+                    prevx = x;
+                }
+                ranksa[level][x.i] = rank;
+                sa[level].push_back(x.i);
+            }
+        }
     }
 
 public:
@@ -51,34 +91,19 @@ public:
         for(depth = 0; k < n; depth++, k*=2);
         debug("depth is %d", depth);
         for(int i=0;i<=depth;i++) {
-            sa[i].resize(n);
             ranksa[i].resize(n);
-            for(int j=0;j<n;j++) {
-                sa[i][j] = j;
-            }
         }
-        buildForZeroLevel();
-        int rank = 1;
-        ranksa[0][sa[0][0]] = 1;
-        for(int i=1;i<n;i++) {
-            if (s[sa[0][i-1]] != s[sa[0][i]]) rank++;
-            ranksa[0][sa[0][i]] = rank;
-            debug("Level 0: %d", sa[0][i]);
-            debug("Rank is: %d", ranksa[0][sa[0][i]]);
+        for(int j=0;j<n;j++) {
+            sa[0].push_back(j);
         }
+        debug("heyhey");
+        radixbuildLevelZero(sa[0]);
+        debugSuffixArray(0);
         for(int i=1;i<=depth;i++) {
-            build(i);
-            int rank = 1;
-            ranksa[0][sa[i][0]] = rank;
-            int half = 1 << (i-1);
-            for(int j=1;j<n;j++) {
-                int x = sa[i][j-1];
-                int y = sa[i][j];
-                if (ranksa[i-1][x] != ranksa[i-1][y] || ranksa[i-1][(x + half) % n] != ranksa[i-1][(y + half) % n]) rank++;
-                ranksa[i][sa[i][j]] = rank;
-                debug("Level %d: %d", i, sa[i][j]);
-                debug("Rank is: %d", ranksa[i][sa[i][j]]);
-            }
+            debug("heyhey");
+            radixbuild(i, sa[i-1]);
+            // debugSuffixArray(i);
+            debug("heyhey");
         }
     }
 
@@ -86,11 +111,20 @@ public:
         return s[x % s.size()];
     }
 
+    void debugSuffixArray(int d) {
+        debug("Level %d suffix array is", d);
+        int i;
+        int n = s.size();
+        for(i=0;i<n;i++) {
+            debug("%d", sa[d][i]);
+        }
+    }
+
     void printSuffixArray() {
         int i;
         int n = s.size();
         for(i=1;i<n;i++) {
-            printf("%d\n", sa[depth][i]);
+            printf("%d ", sa[depth][i]);
         }
     }
 };
