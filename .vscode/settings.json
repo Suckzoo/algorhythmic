@@ -5,6 +5,7 @@
         "system_error": "cpp",
         "type_traits": "cpp",
         "algorithm": "cpp",
-        "string": "cpp"
+        "string": "cpp",
+        "vector": "cpp"
     }
 }
