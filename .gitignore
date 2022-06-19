@@ -35,3 +35,7 @@
 *.in
 *.out
 *.log
+
+# diffs
+diff1
+diff2
